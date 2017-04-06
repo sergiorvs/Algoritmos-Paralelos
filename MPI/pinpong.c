@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <mpi.h>
 
+//Compilar: mpicc -g -Wall -o mpi [Nombre] Ejecutar: mpiexec -n 4 ./mpi
+/*Ejecutar: mpiexec -n [num_proc] ./[nombre]*/
+
 int main(int argc, char *argv[])
 {
   MPI_Status status;
