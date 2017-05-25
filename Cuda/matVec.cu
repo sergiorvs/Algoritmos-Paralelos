@@ -26,7 +26,7 @@ void matAdd(float* A, float* B, float* C, int n){
   cudaMemcpy(d_B,B,size,cudaMemcpyHostToDevice);
   cudaMalloc((void **) &d_C, size);
   //printf("%f\n", B[0]);
-  matAddKernel<<<ceil(n/256.0), 256>>>(d_A,d_B,d_C,n);
+  matAddKernel<<<ceil(n/1024.0), 1024>>>(d_A,d_B,d_C,n);
   
   cudaMemcpy(C,d_C,size,cudaMemcpyDeviceToHost);
 
