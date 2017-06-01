@@ -63,7 +63,6 @@ int main(int argc, char** argv)
     float* imagem_cpu = new float[width * height * 4];
 	float* imagem_gpu = new float[width * height * 4];
 
-	/*Será necesario llenarlo ? */
 	cudaMalloc((void **)(&imagem_gpu), (width * height * 4) * sizeof(float));
 	cudaMemcpy(imagem_gpu, imagem_cpu, (width * height * 4) * sizeof(float), cudaMemcpyHostToDevice);
 
@@ -80,7 +79,7 @@ int main(int argc, char** argv)
 
 	if( !cvSaveImage(argv[2], out_image) )
     {
-        std::cout << "ERROR: No se escribe en la IMG" << std::endl;
+        cout << "ERROR: No se escribe en la IMG" << endl;
     }
 
 	cvReleaseImage(&input_image);

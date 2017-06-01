@@ -9,8 +9,7 @@ using namespace std;
 #define CHANNELS 3 // we have 3 channels corresponding to RGB
 // The input image is encoded as unsigned characters [0, 255]
 __global__ 
-void colorConvertKernel(unsigned char * grayImage,unsigned char * rgbImage,int width, int height)
- {
+void colorConvert(unsigned char * grayImage,unsigned char * rgbImage,int width, int height) {
 	 int x = threadIdx.x + blockIdx.x * blockDim.x;
 	 int y = threadIdx.y + blockIdx.y * blockDim.y;
 
@@ -30,6 +29,21 @@ void colorConvertKernel(unsigned char * grayImage,unsigned char * rgbImage,int w
 	 }
 }
 
+/*
+void gray_parallel(unsigned char* h_in, unsigned char* h_out, int elems, int rows, int cols){
+
+	unsigned char* d_in;
+	unsigned char* d_out;
+	cudaMalloc((void**) &d_in, elems);
+	cudaMalloc((void**) &d_out, rows*cols);
+	
+	cudaMemcpy(d_in, h_in, elems*sizeof(unsigned char), cudaMemcpyHostToDevice);
+    colorConvert<<<rows,cols>>>(d_in, d_out,rows,cols);
+
+	cudaMemcpy(h_out, d_out, rows*cols*sizeof(unsigned char), cudaMemcpyDeviceToHost);
+	cudaFree(d_in);
+	cudaFree(d_out);
+}*/
 
 int main(int argc, char** argv)
 {
@@ -59,13 +73,12 @@ int main(int argc, char** argv)
     float* imagem_cpu = new float[width * height * 4];
 	float* imagem_gpu = new float[width * height * 4];
 
-	/*Será necesario llenarlo ? */
 	cudaMalloc((void **)(&imagem_gpu), (width * height * 4) * sizeof(float));
 	cudaMemcpy(imagem_gpu, imagem_cpu, (width * height * 4) * sizeof(float), cudaMemcpyHostToDevice);
 
 
 	/*Llamados a la funcion Kernel*/															
-	colorConvertKernel(imagem_gpu, input_image, width,  height)
+	colorConvert(imagem_gpu, input_image, width,  height)
 	cudaMemcpy(imagem_cpu, imagem_gpu, (width * height * 4) * sizeof(float), cudaMemcpyDeviceToHost);
 
 	cudaMemcpy(imagem_cpu, imagem_gpu, (width * height * 4) * sizeof(float), cudaMemcpyDeviceToHost);
