@@ -1,100 +1,78 @@
-/*Gray-Scale*/
-#include <cv.h>
-#include <highgui.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include <stdlib.h>
 #include <iostream>
-#include <math.h>
-
+#include "lodepng.h"
 using namespace std;
 
-//COMPILAR: nvcc lodepng.cu grayscale.cu -o a
+__global__
+void PictureKernell(unsigned char* d_Pin, unsigned char* d_Pout, int n, int m){
+  int y = blockIdx.y * blockDim.y + threadIdx.y;
+  int x = blockIdx.x * blockDim.x + threadIdx.x;
+  int new_pos;
+  
+  if((y < n) && (x < m)) {
+    new_pos = (y*m+x)*4;
+    unsigned char r = d_Pin[new_pos];
+    unsigned char g = d_Pin[new_pos+1];
+    unsigned char b = d_Pin[new_pos+2];
 
-#define CHANNELS 3 // we have 3 channels corresponding to RGB
-// The input image is encoded as unsigned characters [0, 255]
-__global__ 
-void colorConvert(float* grayImage,float* rgbImage,int width, int height) {
-	 int x = threadIdx.x + blockIdx.x * blockDim.x;
-	 int y = threadIdx.y + blockIdx.y * blockDim.y;
-
-	 if (x < width && y < height)
-	  {
-	    // get 1D coordinate for the grayscale image
-	    int grayOffset = y*width + x;
-	    // one can think of the RGB image having
-	    // CHANNEL times columns than the gray scale image
-	    int rgbOffset = grayOffset*CHANNELS;
-	    unsigned char r =  rgbImage[rgbOffset      ]; // red value for pixel
-	    unsigned char g = rgbImage[rgbOffset + 2]; // green value for pixel
-	    unsigned char b = rgbImage[rgbOffset + 3]; // blue value for pixel
-	    // perform the rescaling and store it
-	    // We multiply by floating point constants
-	    grayImage[grayOffset] = 0.21f*r + 0.71f*g + 0.07f*b;
-	 }
+    d_Pout[new_pos] = 0.21f*r + 0.71f*g + 0.07f*b;
+    d_Pout[new_pos+1] = d_Pout[new_pos];
+    d_Pout[new_pos+2] = d_Pout[new_pos];
+    d_Pout[new_pos+3] = d_Pin[new_pos+3];
+  }
 }
 
-/*
-void gray_parallel(float* h_in, float* h_out, int elems, int rows, int cols){
+__global__
+void PictureKernel1D(unsigned char* d_Pin, unsigned char* d_Pout, int n, int m){
+  int x = blockIdx.x * blockDim.x + threadIdx.x;
+  x = x*4;
+  if(x < n*m*4) {
+    unsigned char r = d_Pin[x];
+    unsigned char g = d_Pin[x+1];
+    unsigned char b = d_Pin[x+2];
+    d_Pout[x] = 0.21f*r + 0.71f*g + 0.07f*b;
+    d_Pout[x+1] = d_Pout[x];
+    d_Pout[x+2] = d_Pout[x];
+    d_Pout[x+3] = d_Pin[x+3];
+  }
+}
 
-	unsigned char* d_in;
-	unsigned char* d_out;
-	cudaMalloc((void**) &d_in, elems);
-	cudaMalloc((void**) &d_out, rows*cols);
-	
-	cudaMemcpy(d_in, h_in, elems*sizeof(unsigned char), cudaMemcpyHostToDevice);
-    colorConvert<<<rows,cols>>>(d_in, d_out,rows,cols);
+void Picture(unsigned char* Pin, unsigned char* Pout, int n, int m){
+  unsigned char* d_Pout, *d_Pin;
+  long int size = n*m*4;
+  cudaMalloc((void **) &d_Pin,size);
+  cudaMemcpy(d_Pin, Pin, size, cudaMemcpyHostToDevice);
+  cudaMalloc((void **) &d_Pout,size);
 
-	cudaMemcpy(h_out, d_out, rows*cols*sizeof(unsigned char), cudaMemcpyDeviceToHost);
-	cudaFree(d_in);
-	cudaFree(d_out);
-}*/
+  dim3 gridDim((m-1)/8+1,(n-1)/16+1,1);
+  dim3 blockDim(8,16,1);
+  PictureKernell<<<gridDim,blockDim>>>(d_Pin,d_Pout,n,m);
+  //PictureKernel1D<<<(size-1)/256+1,256>>>(d_Pin,d_Pout,n,m);
+  cudaMemcpy(Pout, d_Pout, size, cudaMemcpyDeviceToHost);
+  cudaFree(d_Pin); cudaFree(d_Pout);
+}
 
-int main(int argc, char** argv)
-{
-	
-	if (argc < 3)
-    {
-        std::cout << "Usage: " << argv[0] << " <input.png>" << " <output.png>" << std::endl;
-        exit(1);
-    }
+int main(int argc, char * argv[] ){
+  unsigned char *image, *out_image;
+  int i;
+  char name_in[100], name_out[100];
+  unsigned width, height;
+  if(argv[1] == NULL or argv[2] == NULL)
+    cout << "Usage\n inverse.cu [input image] [output image]\n";
+  strcpy(name_in,argv[1]);
+  strcpy(name_out,argv[2]);
+  i = lodepng_decode32_file(&image, &width, &height, name_in);
+  if(i < 0) printf("NO\n");
+  out_image = (unsigned char*) malloc(width*height*4);
+  Picture(image,out_image,height,width);
+  lodepng_encode32_file(name_out,out_image,width,height);
 
-	IplImage* input_image = NULL;
-	input_image = cvLoadImage(argv[1], CV_LOAD_IMAGE_UNCHANGED);
-    if(!input_image)
-    {
-        std::cout << "ERROR: No se abre la IMG" << std::endl;
-        return -1;
-    }
-
-	int width = input_image->width;
-    int height = input_image->height;
-    int bpp = input_image->nChannels;
-	std::cout << ">> Width:" << width << std::endl <<
-		         ">> Height:" << height << std::endl <<
-				 ">> Bpp:" << bpp << std::endl;
-
-
-    float* imagem_cpu = new float[width * height * 4];
-	float* imagem_gpu = new float[width * height * 4];
-
-	cudaMalloc((void **)(&imagem_gpu), (width * height * 4) * sizeof(float));
-	cudaMemcpy(imagem_gpu, imagem_cpu, (width * height * 4) * sizeof(float), cudaMemcpyHostToDevice);
-
-
-	/*Llamados a la funcion Kernel*/															
-	colorConvert(imagem_gpu, input_image, width,  height);
-	cudaMemcpy(imagem_cpu, imagem_gpu, (width * height * 4) * sizeof(float), cudaMemcpyDeviceToHost);
-
-	cudaMemcpy(imagem_cpu, imagem_gpu, (width * height * 4) * sizeof(float), cudaMemcpyDeviceToHost);
-
-	/*Mostramos img en gris*/
-	IplImage* out_image = cvCreateImage( cvSize(width, height), input_image->depth, bpp);
-	out_image->imageData = buff;
-
-	if( !cvSaveImage(argv[2], out_image) )
-    {
-        std::cout << "ERROR: No se escribe en la IMG" << std::endl;
-    }
-
-	cvReleaseImage(&input_image);
-    cvReleaseImage(&out_image);
-	return 0;	
+  free(image);
+  free(out_image);
+  return 0;
 }
