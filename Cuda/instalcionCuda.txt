@@ -1,0 +1,3 @@
+sudo apt-get install sublime-text-installer
+Compilar:
+nvcc sumaVector.cu -o suma
